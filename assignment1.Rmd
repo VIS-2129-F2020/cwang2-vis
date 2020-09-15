@@ -1,0 +1,326 @@
+---
+title: "assignment1"
+author: "Claire Wang"
+date: "9/9/2020"
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+---
+##Learning Goal
+This assignment is to explore the charateristics of vacancies in Philadelphia Metropolitan Area using US census (2010) and American Community Survey (ACS5 in 2018). I focused on the both the racial side and the gender side of the story by analyzing racial compositions and female householders in terms of educational attainment, marital status, etc.
+
+```{r,message=FALSE, results='hide'}
+library(ggplot2)
+library(tidyverse)
+library(tidycensus)
+library(viridis) 
+library(prettydoc)
+library(hexbin)
+library(ggthemes)
+library(GGally)
+library(treemap)
+```
+
+
+##Variables
+Categorical1:racial compositions in the neighborhood as majority race (majority_race_eth) -- thanks to the contribution of the class file on github.
+Categorical2:reasons for vacancy (vac_by)
+Categorical3:marital status of the female householder - if they are separate, divorced or widowed. (m_status)
+Categorical4: high female educational attainments- college, masters and doctors (edchigh)
+Continuous1:total number of household (tot_hh)
+Continuous2:total vacancies (tot_vac)
+Continuous3:median age (med_age)
+Continuous4:median income (med_inc)
+Continuous5:total occupancy (tot_ocu)
+Continuous6: Number of grandparents responsible for childcare under(grandpc18)
+
+```{r, message=FALSE, results='hide'}
+vars <- c(tot_hh = "H001001",
+         tot_vac = "H003003",
+         tot_vac_rent = "H005002",
+         tot_vac_sal="H005004",
+         tot_ocu = "H003002",
+         tot_pop = "P003001",
+         nh_whiteown = "H006002",
+         nh_blackown = "H006003",
+         nh_asianown = "H006005",
+         nh_morerace = "H006008",
+         med_age="P013001"
+        )
+
+varacs <-c(f_divorced="B12001_019",
+         f_widow="B12002D_012",
+        f_separate="B12002D_011",
+        f_college="B15002_032",
+          f_master="B15002_033",
+          f_phd="B15002_035",
+        grandpc18="B10002_002",
+        med_inc=	"B06011_001"
+)
+
+acs<- get_acs(geography = "tract", variables = varacs,
+                           state = "PA", county = "Philadelphia County",year=2018,
+                           output = "wide",survey = "acs5")
+
+census <- get_decennial(geography = "tract", variables = vars,
+                           state = "PA", county = "Philadelphia",
+                           output = "wide") 
+
+philly_tracts <- inner_join(acs, census, by = "GEOID") %>%
+  mutate(pct_vac = tot_vac/tot_hh,
+         pct_ocu = tot_ocu/tot_hh,
+         pct_divorced= f_divorcedE/tot_pop,
+         pct_widow= f_widowE/tot_pop,
+         pct_separate= f_separateE/tot_pop,
+         pct_college = f_collegeE/tot_pop,
+         pct_master = f_masterE/tot_pop,
+         pct_phd = f_phdE/tot_pop,
+         
+         vac_by= case_when(
+           tot_vac_sal/tot_vac >0.5 ~"selling",
+           tot_vac_rent/tot_vac >0.5 ~"renting",
+           (tot_vac_sal+tot_vac_rent)/tot_vac < 0.5 ~"other"
+         ),
+         
+         m_status= case_when(
+           pct_divorced+pct_separate+pct_widow>0.05 ~"divorced+widow+separate",
+           pct_divorced+pct_separate+pct_widow<0.05 ~"others"
+         ),
+         
+         edchigh= case_when(
+           pct_master+pct_phd >0.1 ~"v_high",
+           (pct_master+pct_phd<0.1) & (pct_college > 0.1) ~ "high_ed",
+           pct_college < 0.1 ~ "not_so_high"
+         ),
+         
+         majority_race_eth = case_when(
+           nh_whiteown / tot_hh > 0.5 ~ "nh_white",
+           nh_blackown / tot_hh > 0.5 ~ "nh_black",
+           nh_asianown / tot_hh > 0.5 ~ "nh_asian",
+           nh_morerace/ tot_hh > 0.5 ~ "more than one",
+           (nh_whiteown + nh_blackown + nh_asianown + nh_morerace) /
+             tot_hh < 0.5 ~ "other",
+           TRUE ~ "None")) %>%
+  
+  filter(tot_pop > 0, tot_hh > 0, pct_vac<0.8) %>%
+  select(GEOID, pct_vac, majority_race_eth, tot_vac,tot_ocu,tot_pop,vac_by,med_age,tot_hh,f_divorcedE,f_widowE,f_separateE,f_collegeE,f_phdE,f_masterE,pct_divorced,pct_widow,pct_separate,pct_college,pct_phd,pct_master,grandpc18E, med_incE,edchigh,m_status
+        )
+```
+
+<br />
+```{r,message=FALSE}
+overall <- ggplot(philly_tracts, 
+       aes(x = pct_vac,
+           y = med_age,
+           size = grandpc18E,
+           color = vac_by,
+           alpha=0.5
+           )) +
+  geom_point() +
+  scale_size_continuous(name = "# of grandparents responsible children") +
+  scale_x_continuous(name = "Percent of vacancy",
+                     breaks = seq(0, 1, by = 0.1),
+                     labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
+  scale_y_continuous(name = "Median age within tract",
+                     breaks = seq(0, 60, by = 5)) +
+  scale_color_discrete(name = "reason for vacancy",
+                       labels = c("selling",
+                                  "renting",
+                                  "other"
+                                  ),
+                      ) +
+  theme_minimal() +
+  scale_color_viridis(discrete = TRUE, option = "D")
+  theme(legend.key.size = unit(0.1, "cm"))
+
+overall
+```
+<br />
+##This is a pie chart for different reasons of vacancies.
+
+```{r,message=FALSE, results="hide"}
+pie_chart <- ggplot(philly_tracts, aes(x = 1, fill = vac_by)) +
+  geom_bar(position = "fill") +
+  coord_polar(theta = "y") +
+  scale_y_continuous(name = "Number of tracts") +
+  scale_fill_discrete(name = "Reason for vacancy",
+                       labels = c("selling",
+                                  "renting",
+                                  "other")) +
+  ggtitle("Reasons for vacancy")+
+  scale_fill_viridis(discrete = TRUE, option = "D")
+  theme_minimal() 
+
+pie_chart
+```
+<br />
+##This is a violin plot of perentage vacancy of different races.
+```{r,message=FALSE}
+
+violin<- ggplot(philly_tracts, 
+       aes(x = majority_race_eth,
+           y = pct_vac
+           )
+          
+           ) +
+  geom_violin(aes(color=majority_race_eth),alpha=0.5) +
+  geom_point(position = "jitter",
+             alpha = 0.5,
+             size = 0.5,
+             
+             ) +
+  scale_x_discrete(name = "Majority race/ethnicity",
+                       labels = c("white",
+                                  "black",
+                                  "asian",
+                                  "more than one race"), ) +
+  scale_y_continuous(name = "percentage vacancy",
+                     breaks = seq(0, 100, by = 10), labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
+  ggtitle("Percentage Vacancy by Race")+
+  theme_light() +
+  scale_color_viridis(discrete = TRUE, option = "D")+
+  theme(legend.position = "below")
+
+violin
+```
+
+<br />
+##This is graph of percentage vacancy across different female educational attainment.
+```{r,message=FALSE}
+vacVShh<- ggplot(philly_tracts, 
+       aes(x = edchigh,
+           y = pct_vac,
+           )) +
+  geom_point(aes(color=edchigh),alpha=0.5) +
+  scale_y_continuous(name = "percentage vacancy") +
+  scale_x_discrete(name = "educational level of female householders"
+                    ) +
+  ggtitle("Reasons for vacancy by female educational level")+
+  scale_color_viridis(discrete = TRUE, option = "D")+
+  theme_economist_white() 
+
+vacVShh
+```
+## This is a graph to show the correlation of median income (log of 10) and percentage vacancy. We can tell the lower the income, the more vacant units are in the neighborhood.
+```{r,message=FALSE}
+ggplot(philly_tracts, aes(pct_vac, med_incE))+
+  geom_point(aes(color = m_status,alpha=0.5)) +
+  geom_smooth(aes(color = pct_vac, fill = pct_vac), method = "lm") + 
+  scale_color_viridis(discrete = TRUE,option="D")+
+  scale_fill_viridis(discrete = TRUE,option = "D") +
+  scale_y_log10(name = "ln(median income)") +
+  scale_x_continuous(name = "percentage vacancy") +
+    scale_color_discrete(name = "reason for vacancy",
+                       labels = c("divorced+widowed+separated",
+                                  "others"
+                                  ),
+                      ) +
+  ggtitle("Reasons for vacancy")+
+  theme_minimal() +
+  theme(legend.key.size = unit(0.1, "cm"))
+```
+<br />
+##This is a heatmap of percentage vacancy between different majority race and female educational attainment.
+```{r,message=FALSE}
+heat<- ggplot(philly_tracts, aes(edchigh, majority_race_eth, fill= pct_vac)) + 
+  geom_tile() +
+  scale_x_discrete(name="female educational level")+
+  scale_y_discrete(name="racial majority")
+  ggtitle("Heatmap of percentage vacancy by racial composition and female educational attainment ")+
+  scale_fill_viridis(discrete=TRUE,alpha=0.8) +
+  theme_minimal()
+
+heat
+```
+
+<br />
+##This is a pearson correlation plot between different variable pairs.
+
+```{r,message=FALSE}
+newdf<- philly_tracts [,c("GEOID","pct_vac","majority_race_eth","tot_vac","tot_ocu","tot_pop","vac_by","med_age","med_incE","edchigh","m_status")]
+
+ggcorr(newdf, method = c("pairwise", "pearson")) +
+  ggtitle("Pearson Correlation")+
+  scale_fill_viridis(discrete=FALSE,alpha=0.8)
+  
+
+```
+## This is a graph of scatter plot of percentage occupancy and median income. The different colors and box plot shows distributions of different female educational attainment.
+```{r,message=FALSE}
+  ggplot(philly_tracts, aes(x=med_incE, y=pct_vac, color = edchigh)) +
+    geom_point(alpha=0.3) +
+    geom_boxplot(
+  data = philly_tracts,
+  stat = "boxplot", alpha=0.5)+
+    scale_color_viridis(discrete=TRUE, guide=FALSE) +
+  ggtitle("percentage of vacancy by median income")+
+  scale_x_continuous(name="median income", )+
+  scale_y_continuous(name="percentage vacancy")+
+  scale_color_discrete(name="female educational level")+
+  scale_color_viridis(discrete=TRUE,alpha=0.8,option="D") +
+    theme_minimal() +
+    theme(legend.position = "right")
+```
+<br />
+## This is a graph of both distribution graph of income and female higher edcuation attainment on the same axis of income. 
+```{r,message=FALSE}
+p <- ggplot(philly_tracts, aes(x=med_incE/10000) ) +
+  # Top
+  geom_density( aes(x = tot_vac, y = ..density..), fill="#69b3a2") +
+  geom_label( aes(x=1000, y=0.001, label="income"), color="#69b3a2") +
+
+  # Bottom
+  geom_density( aes(x = tot_hh, y = -..density..), fill= "#404080") +
+  geom_label( aes(x=2500, y=-0.001, label="percentage of college"), color="#404080") +
+coord_cartesian( ylim = c(-0.005, 0.005))+
+  theme_minimal() +
+  xlab("value of x")+
+  ggtitle("distribution of income and high female educational attainment")
+
+p
+```
+<br />
+## This is a graph to show the make up of different races for the total vacancy. 
+
+```{r,message=FALSE}
+tree<-treemap(philly_tracts,
+            index="majority_race_eth",
+            vSize="tot_vac",
+            aes(color="majority_race_eth"))+
+scale_color_viridis(discrete=TRUE, guide=FALSE)
+
+tree
+```
+<br />
+##This is a bar chart of total vacancy in the tract by different reasons (color stacking) and by the majority race (x-axis).
+
+```{r,message=FALSE}
+ggplot(philly_tracts, aes(fill=vac_by, y=tot_vac, x=majority_race_eth)) + 
+    geom_bar(position="stack", stat="identity")+
+  scale_x_discrete(name="majority race")+
+  scale_y_continuous(name="total number of vacancies")+
+  scale_color_discrete(name="reasons for vacancies")+
+  scale_fill_viridis(discrete=TRUE)+
+  ggtitle("total vacancies by race by reasons of vacancy")+
+  theme_minimal()
+```
+
+<br />
+##This is a beehive graph where each little hive is a tract with total occupancy value on x-axis and median income on y-axis.
+
+
+```{r,message=FALSE}
+x<- as.numeric(philly_tracts$tot_ocu)
+y<-  as.numeric(philly_tracts$med_incE)
+
+bin<-hexbin(x, y, xbins=40)
+pal <- colorRampPalette(c("#BEEED0", "#566B5E"))
+plot(bin, main="median income vs total occupancy" , legend=F,colramp=pal, xlab="total occupancy", ylab="median income") +
+theme_minimal()+
+  scale_fill_viridis(discrete=TRUE)
+  
+
+```
+
