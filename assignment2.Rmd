@@ -8,6 +8,8 @@ output:
     toc: true
     toc_float: true
 ---
+<br/>
+<br/>
 ##This assignment is to create a map of South America using three types of projection. Estimated GDP of the country in million dollar (md_GDP_est) is used for the variable of analysis.
 <br/>
 <br/>
