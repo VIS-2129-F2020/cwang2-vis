@@ -10,7 +10,7 @@ output:
 ---
 ##This assignment is to create a map of South America using three types of projection. Estimated GDP of the country in million dollar (md_GDP_est) is used for the variable of analysis.
 <br/>
-
+<br/>
 
 ```{r setup, include=FALSE}
 library(ggplot2)
@@ -22,7 +22,7 @@ library(cartogram)
 library(ggthemes)
 ```
 
-```{r}
+```{r,message=FALSE}
 world <- ne_countries(scale = 50, returnclass = "sf") 
 
 world_map <- ggplot(world) +
@@ -39,26 +39,30 @@ sa_map <- ggplot(sa_countries) +
 sa_map
 
 ```
-
+<br/>
+<br/>
 ##projections:
 1. mexicolcc:SR-ORG:39: Mexico Lambert Conical Conformal<br/>
 2. saed:ESRI:102033: South America Albers Equal Area Conic<br/>
 3. salcc: ESRI:102015: South America Lambert Conformal Conic<br/>
 4. saea:ESRI:102033: South America Albers Equal Area Conic<br/>
 <br/>
-
-```{r}
+<br/>
+```{r,message=FALSE}
 mexicolcc <- "+proj=lcc +lat_1=17.5 +lat_2=29.5 +lat_0=12 +lon_0=-102 +x_0=2500000 +y_0=0 +ellps=WGS84 +units=m +no_defs"
 
 salcc <- "+proj=lcc +lat_1=-5 +lat_2=-42 +lat_0=-32 +lon_0=-60 +x_0=0 +y_0=0 +ellps=aust_SA +units=m +no_defs"
 saea <- "+proj=aea +lat_1=-5 +lat_2=-42 +lat_0=-32 +lon_0=-60 +x_0=0 +y_0=0 +ellps=aust_SA +units=m +no_defs"
 saed <- "+proj=eqdc +lat_0=0 +lon_0=0 +lat_1=-5 +lat_2=-42 +x_0=0 +y_0=0 +ellps=aust_SA +units=m +no_defs"
 ```
+<br/>
+<br/>
 ##Map 1:
 1. projection:SR-ORG:39: Mexico Lambert Conical Conformal
 <br/>
+<br/>
 
-```{r}
+```{r,message=FALSE}
 sa_transformed0 <- sa_countries %>%
   st_transform(crs = mexicolcc)
 
@@ -68,11 +72,13 @@ ggplot(sa_transformed0) +
   theme_wsj()
 
 ```
+<br/>
+<br/>
 ##Map 2:
 1. projection: ESRI:102033: South America Albers Equal Area Conic
 <br/>
-
-```{r}
+<br/>
+```{r, message=FALSE}
 sa_transformed1 <- sa_countries %>%
   st_transform(crs = salcc)
 
@@ -85,7 +91,7 @@ ggplot(sa_transformed1) +
   theme_dark()
 
 ```
-```{r}
+```{r,message=FALSE}
 ggplot(sa_transformed1, aes(fill = gdp_md_est)) +
   geom_sf(color = NA) +
   geom_sf_label(aes(label=sov_a3),label.r = unit(0.15, "lines"),
@@ -100,10 +106,13 @@ ggplot(sa_transformed1, aes(fill = gdp_md_est)) +
   theme_map() +
   theme(legend.background = element_blank())
 ```
+<br/>
+<br/>
 ##Map 3:
 1. projection: ESRI:102015: South America Lambert Conformal Conic
 <br/>
-```{r}
+<br/>
+```{r,message=FALSE}
 sa_transformed2 <- sa_countries %>%
   st_transform(crs = saea)
 
@@ -114,14 +123,13 @@ ggplot(sa_transformed2) +
   theme_stata()
 
 ```
-```{r}
+```{r, message=FALSE}
 cartogram_ncont <- sa_transformed2 %>%
-  cartogram_ncont("gdp_md_est")
+  cartogram_ncont("pop_est")
 
 ggplot(cartogram_ncont, aes(fill = gdp_md_est)) +
   geom_sf(color = NA) +
-  geom_sf_text(aes(label=sov_a3),label.r = unit(0.15, "lines"),
-  label.size = 0.2
+  geom_sf_text(aes(label=sov_a3)
   )+
   scale_fill_viridis_c(
     name = "GDP estimate (Million Dollar)",
@@ -131,10 +139,13 @@ ggplot(cartogram_ncont, aes(fill = gdp_md_est)) +
   theme_map() +
   theme(legend.background = element_blank())
 ```
+<br/>
+<br/>
 ##Map 4:
 1. projection: ESRI:102033: South America Albers Equal Area Conic
 <br/>
-```{r}
+<br/>
+```{r,message=FALSE}
 sa_transformed3 <- sa_countries %>%
   st_transform(crs = saed)
 
@@ -145,14 +156,14 @@ ggplot(sa_transformed3) +
 
 ```
 
-```{r}
+```{r,message=FALSE}
+
 cartogram_dorling <- sa_transformed3 %>%
   cartogram_dorling("gdp_md_est")
 
 ggplot(cartogram_dorling, aes(fill = gdp_md_est)) +
   geom_sf(color = NA) +
-   geom_sf_text(aes(label=sov_a3),label.r = unit(0.15, "lines"),
-  label.size = 0.2
+   geom_sf_text(aes(label=sov_a3)
   )+
   scale_fill_viridis_c(
     name = "GDP estimate (Million Dollar)",
