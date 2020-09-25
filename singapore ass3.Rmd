@@ -1,0 +1,359 @@
+---
+title: "assignment3"
+author: "Claire Wang"
+date: "9/24/2020"
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+---
+<br/>
+<br/>
+##This assignment is to create 6 maps of Singapore. The two point layers are recycle bins and Singapore Police Force Mobile Speed Cameras, and skyline greenery. The two polygon layers are Singapore Residents by Planning Area and Type of Dwelling and Parks and tree conservation area.
+
+Source:https://data.gov.sg/dataset/
+variables:
+https://data.gov.sg/dataset/singapore-police-force-mobile-speed-cameras?resource_id=4ddfb2f8-9192-4561-b723-d6af2925060a
+https://data.gov.sg/dataset/recycling-bins?resource_id=895f1883-d3bf-467c-833c-226ad92c6229
+https://data.gov.sg/dataset/singapore-residents-by-planning-area-and-type-of-dwelling-june-2014?resource_id=622936e8-8596-4489-8eb6-da8703c606c1
+https://data.gov.sg/dataset/sdcp-park?resource_id=7cdb6581-f193-440d-b55a-c6d6a44b03a3
+https://data.gov.sg/dataset/tree-conservation-area
+<br/>
+<br/>
+```{r, message=FALSE}
+library(sf)
+library(tidyverse)
+library(ggthemes)
+library(ggspatial)
+library(units)
+library(nngeo)
+```
+
+```{r, message=F}
+respop <- st_read("/Users/clara/OneDrive - Harvard University/singapore-residents-by-planning-area-and-type-of-dwelling-june-2014/PLAN_BDY_DWELLING_TYPE_2014.kml",  quiet = TRUE) 
+
+park<- st_read("/Users/clara/OneDrive - Harvard University/G_MP08_PARKS_PL.kml",  quiet = TRUE)
+
+rebin <- st_read("/Users/clara/OneDrive - Harvard University/recycling-bins/RECYCLINGBINS.kml",  quiet = TRUE) 
+
+rebin1 <- st_read("/Users/clara/OneDrive - Harvard University/recycling-bins/RECYCLINGBINS.kml",  quiet = TRUE) 
+
+speedcam <- st_read("/Users/clara/OneDrive - Harvard University/singapore-police-force-mobile-speed-cameras/SPF_MSC.kml",   quiet = TRUE) 
+
+treec <- st_read("/Users/clara/OneDrive - Harvard University/tree-conservation-area-kml.kml", quiet = TRUE)
+
+skylinegreen <-st_read("/Users/clara/OneDrive - Harvard University/skyrise-greenery/SKYRISEGREENERY.kml",quiet=T)
+
+skylinegreen1 <-st_read("/Users/clara/OneDrive - Harvard University/skyrise-greenery/SKYRISEGREENERY.kml",quiet=T)
+
+sg <- "+proj=utm +zone=48 +ellps=WGS84 +units=m +no_defs "
+
+respop <- respop %>%
+  st_transform(sg)
+
+skylinegreen1 <- skylinegreen1 %>%
+  st_transform(sg)
+
+park <- park %>%
+  st_transform(sg)
+
+rebin <- rebin %>%
+  st_transform(sg)
+rebin1 <- rebin %>%
+  st_transform(sg)
+
+speedcam <- speedcam %>%
+  st_transform(sg)
+
+skylinegreen <- skylinegreen%>%
+  st_transform(sg)
+
+treec <- treec %>%
+  st_transform(sg)
+```
+
+
+```{r, message=F}
+ggplot(respop) +
+  geom_sf(fill = "lightgrey", color = "white") +
+  geom_sf(data = park, fill = "darkgreen",alpha=0.5,color=NA) +
+  geom_sf(data = rebin, color="lightblue", fill=NA,size = 0.01) +
+  geom_sf(data= speedcam, fill = NA, color = "gray") +
+  geom_sf(data=treec,fill="lightgreen",alpha=0.5,color=NA)+
+  geom_sf(data=skylinegreen, color="lightyellow",fill=NA,size=0.01)+
+  theme_map() +
+  annotation_scale()
+```
+</br>
+</br>
+1. The number of skyline greenery within 100 m of recycle bins is 112, which is 29% of skyline greeneries.
+</br>
+</br>
+
+```{r}
+rebin_buffer <- st_buffer(rebin, dist = 100) %>%
+  st_union()
+
+sk_bin <- skylinegreen[rebin_buffer,]
+ 
+skylinegreen <- skylinegreen %>%
+  st_join(sk_bin) %>%
+   mutate(by_bins = !is.na(Name.y))
+
+n_sky_bin <- sum(skylinegreen$by_bins)
+
+n_sky_bin
+
+n_sky <- length(skylinegreen$by_bins)
+
+pct_sky_bins <- n_sky_bin/ n_sky
+
+pct_sky_bins
+
+left_side  <- st_bbox(skylinegreen)$xmin
+top_side <- st_bbox(skylinegreen)$ymax
+
+ggplot(respop) +
+  geom_sf(fill = "lightgrey", color = "white") +
+  geom_sf(data=rebin_buffer, fill="lightblue",alpha=0.5)+
+  geom_sf(data = skylinegreen, size = 0.01,
+          aes(color = by_bins)) +
+  scale_color_manual(values = c("lightgreen", "darkgreen"),
+          name = "Singapore skyline greeneries by or not by recycle bins", 
+          labels = c("No recycle bins within 500m",
+                     "recycle bins within 500m")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side, 
+           y = top_side, 
+           label = paste("Of the ", 
+                         prettyNum(n_sky, big.mark = ","),
+                         "skyline greeneries in Singapore", 
+                         prettyNum(n_sky_bin, big.mark = ","),
+                         " (", 
+                         prettyNum(100*pct_sky_bins, digits = 0),
+                         "%) are within 100\nmeters of a parking meter.",
+                         sep = ""),
+           hjust = 0, vjust = 0, size = 3) +
+  theme_map() +
+  theme(panel.background = element_rect(fill = "white"),
+        legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+</br>
+</br>
+2. The number of recycle bins in the neighborhood.
+</br>
+</br>
+```{r}
+respop <- respop %>%
+  mutate(num_bins = lengths(st_covers(respop, rebin)))
+
+left_side  <- st_bbox(rebin)$xmin
+top_side <- st_bbox(rebin)$ymax
+
+mydorm <- respop%>% filter(Name=="BEDOK")
+
+my_bin <- rebin[mydorm,]
+
+rebin <- rebin %>%
+  st_join(my_bin) %>%
+   mutate(by_me = !is.na(Name.y))
+
+n_my_bin <- sum(rebin$by_me)
+
+n_bin <- length(rebin$by_me)
+
+pct_my_bins <- n_my_bin/ n_bin
+
+ggplot(respop) +
+  geom_sf(color = NA, 
+          aes(fill = num_bins)) +
+  scale_fill_viridis_c(name = "Singapore neighborhood\n by number of recyclebins",
+                       breaks = breaks <- seq(0, 900, by = 100),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "bins")) +
+  geom_sf(data=mydorm,fill=NA,color="red")+
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+   annotate(geom = "text", x = left_side, 
+           y = top_side, 
+           label = paste("Of the ", 
+                         prettyNum(n_bin, big.mark = ","),
+                         "recycle bins in Singapore, ", 
+                         prettyNum(n_my_bin, big.mark = ","),
+                         " (", 
+                         prettyNum(100*pct_my_bins, digits = 0),
+                         "%) are within my neighborhood.",
+                         sep = ""),
+           hjust = 0, vjust = 0, size = 3) +
+theme_map() +
+  theme(legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+</br>
+</br>
+3. The number of skyline greeneries in the tree conservation area.
+</br>
+</br>
+```{r}
+treec <- treec %>%
+  mutate(num_sky = lengths(st_covers(treec, skylinegreen1)))
+
+left_side  <- st_bbox(skylinegreen1)$xmin
+top_side <- st_bbox(skylinegreen1)$ymax
+
+n_skyl <- skylinegreen1[treec,]
+
+skylinegreen1 <- skylinegreen1 %>%
+  st_join(n_skyl) %>%
+   mutate(by_tc = !is.na(Name.y))
+
+a <- sum(skylinegreen1$by_tc)
+
+b <- length(skylinegreen1$by_tc)
+
+c <- a/ b
+
+ggplot(respop) +
+  geom_sf(color = NA, 
+          fill="lightgray") +
+  geom_sf(data=treec,fill="lightgreen")+
+    geom_sf(data = skylinegreen1, size = 0.01,
+          aes(color = by_tc))+
+  scale_color_manual(values = c("blue", "yellow"),
+          name = "Singapore skyline greeneries by or not in tree conservation area", 
+          labels = c("Skyline green not in TCA",
+                     "Skyline green in TCA")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+   annotate(geom = "text", x = left_side, 
+           y = top_side, 
+           label = paste("Of the ", 
+                         prettyNum(b, big.mark = ","),
+                         "skyline greens in Singapore, ", 
+                         prettyNum(a, big.mark = ","),
+                         " (", 
+                         prettyNum(100*c, digits = 0),
+                         "%) are in the Tree Conservation Area.",
+                         sep = ""),
+           hjust = 0, vjust = 0, size = 3) +
+theme_map() +
+  theme(legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+</br>
+</br>
+4. The number of neighborhoods overlapping with TCA.
+</br>
+</br>
+```{r, message=F}
+respop <- respop %>%
+  mutate(num_tca = lengths(st_overlaps(respop, treec))) %>%
+  mutate(has_tca = num_tca > 0)
+
+n_tca_nhoods <- sum(respop$has_tca)
+
+n_tca_nhoods
+
+left_side  <- st_bbox(respop)$xmin
+top_side <- st_bbox(respop)$ymax
+
+ggplot(respop) +
+  geom_sf(fill = "lightgrey", aes(fill=has_tca)) +
+  scale_fill_manual(values = c("cornsilk1", "darkseagreen1"),
+          name = "Singapore Neighborhoods\nby presence of a TCA", 
+          labels = c("Neighborhood without\nan overlapping tca",
+                     "Neighborhood with an\noverlapping TCA")) +
+  geom_sf(data=treec, fill="lightgreen", alpha=0.4)+
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side, 
+           y = top_side - 1000, 
+           label = paste(n_tca_nhoods ,
+                         "of Singapore's", 
+                         length(respop$Name),
+                         "neighborhoods contain\nor overlap with", 
+                         "TCA."),
+           hjust = 0, vjust = 0, size = 3) +
+  theme_map() +
+  theme(panel.background = element_rect(fill = "white"),
+        legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+
+```
+
+</br>
+</br>
+5. The number of neighborhoods overlapping with PARK.
+</br>
+</br>
+```{r, message=F}
+respop <- respop %>%
+  mutate(num_tca = lengths(st_overlaps(respop, park))) %>%
+  mutate(has_tca = num_tca > 0)
+
+n_p_nhoods <- sum(respop$has_tca)
+
+left_side  <- st_bbox(respop)$xmin
+top_side <- st_bbox(respop)$ymax
+
+ggplot(respop) +
+  geom_sf(fill = "lightgrey", aes(fill=has_tca),alpha=0.5) +
+  scale_fill_manual(values = c("cornsilk1", "darkseagreen1"),
+          name = "Singapore Neighborhoods\nby presence of a park", 
+          labels = c("Neighborhood without\nan overlapping park",
+                     "Neighborhood with an\noverlapping park")) +
+  geom_sf(data=park, fill="darkgreen", alpha=0.4)+
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side, 
+           y = top_side - 1000, 
+           label = paste(n_p_nhoods ,
+                         "of Singapore's", 
+                         length(respop$Name),
+                         "neighborhoods contain\nor overlap with", 
+                         "a park."),
+           hjust = 0, vjust = 0, size = 3) +
+  theme_map() +
+  theme(panel.background = element_rect(fill = "white"),
+        legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+
+```
+
+</br>
+</br>
+6. average density of recycle bins in neighborhood
+</br>
+</br>
+
+```{r, message=F}
+num_bins <-length(rebin1$Name)
+respop <- respop%>%
+  mutate(area = set_units(st_area(respop), km^2)) %>%
+  mutate(recycle = as.numeric(num_bins / area))
+
+ggplot(respop) +
+  geom_sf(color = NA, 
+          aes(fill = recycle)) +
+    scale_fill_viridis_c(name = 
+                           "Singapore neighborhood recycle bin density",
+                       breaks = breaks <- seq(0, 15000, by = 1500),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "bins per square km"), direction = -1) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.position = "left",
+    legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
