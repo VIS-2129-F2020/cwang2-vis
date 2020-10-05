@@ -10,7 +10,7 @@ output:
 ---
 <br/>
 <br/>
-##This assignment is to use network data to find walkshed, bikeshed and motorized-shed.
+## This assignment is to use network data to find walkshed, bikeshed and motorized-shed.
 <br/>
 <br/>
 
@@ -51,7 +51,7 @@ openspace<- openspace[nhoods,] %>%
 
 ```
 
-```{r, message=FALSE}}
+```{r, message=FALSE}
 boston_street_features <- opq(bbox = 'Boston MA USA') %>%
   add_osm_feature(key = 'highway') %>%
   osmdata_sf()
@@ -62,10 +62,10 @@ boston_streets <- boston_street_features$osm_lines %>%
 ggplot(boston_streets) +
   geom_sf() +
   theme_map()
-
+ 
 ```
 
-```{r,message=FALSE}
+```{r,message=FALSE,warning=F}
 path_otp <- otp_dl_jar("OTP")
 
 path_data <- file.path(getwd(), "OTP")
@@ -96,6 +96,7 @@ iso_all_modes <- rbind(iso_10min_drive, iso_10min_walk)
 
 otp_stop()
 ```
+
 ```{r,message=F, fig.size=10}
 right_side <- st_bbox(iso_all_modes)$xmax
 left_side  <- st_bbox(iso_all_modes)$xmin
@@ -103,15 +104,56 @@ top_side <- st_bbox(iso_all_modes)$ymax
 bottom_side <- st_bbox(iso_all_modes)$ymin
 
 ggplot(iso_all_modes) +
-  annotation_map_tile(zoomin = 0, progress = "none") +
+  annotation_map_tile(zoomin = 0, type = "cartolight", progress = "none") +
   geom_sf(aes(fill = mode), alpha = 0.5) +
-  geom_sf(data = CPL_libraries) +
   coord_sf(xlim = c(left_side, right_side), 
            ylim = c(bottom_side, top_side), expand = FALSE) +
-  scale_fill_viridis_d(name = "Area that is reachable within 10 minutes",
+  scale_fill_viridis_d(name = "Public Schools & Area that is reachable within 10 minutes",
                        labels = c("By car", "By foot")) +
   theme_map() +
   labs(caption = "Basemap Copyright OpenStreetMap contributors")
 ```
 
+
+```{r,message=F}
+iso_areas <- iso_all_modes %>%
+  mutate(area = st_area(iso_all_modes)) %>%
+  st_set_geometry(NULL) %>%
+  pivot_wider(names_from = mode, values_from = area) 
+
+ggplot(iso_areas, 
+       aes(x = as.numeric(walk), y = as.numeric(drive))) +
+  geom_point() +
+  scale_x_continuous(name = 
+            "Area within a five-minute walking distance\nof a public school\n(square km)") +
+  scale_y_continuous(name = 
+            "Area within a five-minute driving distance\nof a public school\n(square km)",breaks = breaks <- seq(0, 8000000, by = 1000000),
+            labels = breaks / 1000000) +
+  theme_bw()
+```
+
+```{r}
+library(reshape2)
+new_iso_areas <- melt(iso_areas,
+    measure.vars=c("walk", "drive"),
+    variable.name="mode",
+    value.name="area")
+new_iso_areas <- new_iso_areas %>%  mutate(area = as.numeric(area))
+ggplot(new_iso_areas , aes(x = mode, y = area/1000000)) +  
+  geom_violin(aes(fill=mode),alpha=0.5) +
+  geom_point(position = "jitter",
+             alpha = 0.5,
+             size = 0.5
+             ) +
+  scale_x_discrete(name = "mode",
+                       labels = c("walk",
+                                  "drive"
+                                  ), ) +
+  scale_y_continuous(name = "area"
+                  ) +
+  ggtitle("Area within a ten-minute distance\nof a public school\n(square km) ")+
+  theme_light() +
+  theme(legend.position = "below")
+
+```
 
