@@ -3,24 +3,25 @@ title: "assignment4"
 author: "Claire Wang"
 date: "9/17/2020"
 output:
+  pdf_document:
+    toc: yes
   html_document:
     theme: yeti
-    toc: true
-    toc_float: true
+    toc: yes
+    toc_float: yes
 ---
-<br/>
-<br/>
-## This assignment is to use network data to find walkshed, bikeshed and motorized-shed.
-<br/>
-<br/>
 
-```{r setup, include=FALSE}
+## This assignment is to use network data to find walkshed, bikeshed and motorized-shed.
+
+
+```{r setup, message=F}
 library(osmdata)
 library(opentripplanner)
 library(tidyverse)
 library(sf)
 library(ggthemes)
 library(ggspatial)
+library(reshape2)
 ```
 
 ```{r, message=FALSE}
@@ -47,8 +48,6 @@ hospital<- hospital[nhoods,] %>%
 
 openspace<- openspace[nhoods,] %>%
   st_join(nhoods)
-
-
 ```
 
 ```{r, message=FALSE}
@@ -65,7 +64,7 @@ ggplot(boston_streets) +
  
 ```
 
-```{r,message=FALSE,warning=F}
+```{r,message=FALSE,warning=F,results="hide"}
 path_otp <- otp_dl_jar("OTP")
 
 path_data <- file.path(getwd(), "OTP")
@@ -75,11 +74,9 @@ otp_build_graph(otp = path_otp, dir = path_data, memory = 1024)
 otp_setup(otp = path_otp, dir = path_data, memory =1024)
 otpcon <- otp_connect()
 
-
-
 ```
 
-```{r, message=F}
+```{r, message=F,results='hide'}
 iso_10min_walk <- 
   otp_isochrone(otpcon = otpcon, fromPlace = publicschool, 
                 mode = "WALK", cutoffSec = 600) %>%
@@ -96,6 +93,8 @@ iso_all_modes <- rbind(iso_10min_drive, iso_10min_walk)
 
 otp_stop()
 ```
+# Map of Public Schools & Area that is reachable within 10 minutes
+This graph shows how public schools are spatially distributed in Charlestown and South Boston. The yellow region is the 10 minute reach on foot and the purple is 10 min reach by car. It looks like both towns have public schools within 10-min drive from anywhere in the town. But Charlestown is better covered by walking distance isochrones.
 
 ```{r,message=F, fig.size=10}
 right_side <- st_bbox(iso_all_modes)$xmax
@@ -115,6 +114,10 @@ ggplot(iso_all_modes) +
 ```
 
 
+# Area of 10 min walk from public schools in relation to that of 10-min drive
+
+This graph shows the distribution of area of walk against that of driving. There is no clear pattern of correlation.
+
 ```{r,message=F}
 iso_areas <- iso_all_modes %>%
   mutate(area = st_area(iso_all_modes)) %>%
@@ -132,12 +135,19 @@ ggplot(iso_areas,
   theme_bw()
 ```
 
+
+# Distribution Area of isocrone from public schools 
+
+This graph shows the distribution of area of isocrones. The walking isocrone is smaller than that of driving and is also has a smaller variance.
+
+
 ```{r}
-library(reshape2)
+
 new_iso_areas <- melt(iso_areas,
     measure.vars=c("walk", "drive"),
     variable.name="mode",
     value.name="area")
+
 new_iso_areas <- new_iso_areas %>%  mutate(area = as.numeric(area))
 ggplot(new_iso_areas , aes(x = mode, y = area/1000000)) +  
   geom_violin(aes(fill=mode),alpha=0.5) +
