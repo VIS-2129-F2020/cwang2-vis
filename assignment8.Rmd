@@ -1,0 +1,47 @@
+---
+title: "assignment8"
+author: "Claire Wang"
+date: "10/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(htmlwidgets)
+```
+
+## Interactive map 
+
+```{r, message=F}
+bostonVUL <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/34f2c48b670d4b43a617b1540f20efe3_0.kml?outSR={%22latestWkid%22:3857,%22wkid%22:102100}", quiet= TRUE)
+
+geojsn <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/34f2c48b670d4b43a617b1540f20efe3_0.geojson?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D", quiet= TRUE)
+```
+
+```{r}
+pal <- colorNumeric(
+  palette = "Blues",
+  domain = geojsn$POP100_RE)
+
+parks_map3 <- leaflet(geojsn) %>%
+  addProviderTiles(providers$CartoDB.Voyager) %>%
+  addPolygons(fillColor = ~pal(geojsn$POP100_RE), fillOpacity = 0.5, stroke = FALSE,
+              highlightOptions = highlightOptions(fillColor = "yellow", 
+                                                  fillOpacity = 0.5),
+              label = geojsn$Name,
+              popup = paste("%disability:",prettyNum(geojsn$TotDis/geojsn$POP100_RE*100, digits = 3), "<br>","%poc:",prettyNum(geojsn$POC2/geojsn$POP100_RE*100,digits = 3),"<br>","%child:",prettyNum(geojsn$TotChild/geojsn$POP100_RE*100,digits = 3),"<br>","%elder:",prettyNum(geojsn$OlderAdult/geojsn$POP100_RE*100,digits = 3),"<br>","%medically ill:",prettyNum(geojsn$MedIllnes/geojsn$POP100_RE*100,digits = 3))) %>%
+  addControl("climate vulnerable population in Boston", position = "topright") %>%
+  addControl('<a href="https://data.boston.gov/dataset/climate-ready-boston-social-vulnerability/resource/caad66ae-62e2-48e5-a6c2-7758ce913ede">Data source</a>', position = "bottomleft") %>%
+  addLegend(pal = pal,
+             values = geojsn$POP100_RE,
+             title = "population",
+            opacity = 0.5)
+
+parks_map3
+saveWidget(parks_map3, file = "boston climate vulnerable population.html")
+```
+
+
