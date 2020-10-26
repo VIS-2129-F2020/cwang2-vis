@@ -41,7 +41,7 @@ parks_map3 <- leaflet(geojsn) %>%
             opacity = 0.5)
 
 parks_map3
-saveWidget(parks_map3, file = "boston climate vulnerable population.html")
+saveWidget(parks_map3, file = "boston.html")
 ```
 
 
