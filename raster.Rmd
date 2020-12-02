@@ -1,0 +1,129 @@
+---
+title: "raster"
+author: "Claire Wang"
+date: "10/29/2020"
+output: html_document
+---
+
+```{r , include=FALSE}
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(htmlwidgets)
+library(raster)
+library(gstat)
+library(spatial)
+```
+
+## Cloropleth map
+
+```{r , warning=FALSE, message=FALSE, comment=F}
+
+nhoods <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/3525b0ee6e6b427f9aab5d0a1d0a1a28_0.kml", quiet = TRUE) 
+
+v0<-st_read("https://bostonopendata-boston.opendata.arcgis.com/datasets/5bed19f1f9cb41329adbafbd8ad260e5_0.kml?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",quiet=T)
+
+nhoods <- nhoods %>%
+  mutate(num_v0 = lengths(st_covers(nhoods, v0)))
+
+nhoods$label <- 
+  paste(nhoods$Name, "<br>", 
+        nhoods$num_v0, " number of crash incidents") %>% 
+  lapply(htmltools::HTML)
+
+pal <- colorNumeric(
+  palette = "Blues",
+  domain = nhoods$num_v0)
+
+leaflet(nhoods) %>%
+  addProviderTiles(providers$CartoDB.Voyager) %>%
+  addPolygons(label=~nhoods$label, fillColor = ~pal(nhoods$num_v0), fillOpacity = 0.5, stroke = FALSE,
+              highlightOptions = highlightOptions(fillColor = "yellow", 
+                                                  fillOpacity = 0.5)
+              
+              ) %>%
+  addControl("Vision Zero report by neighborhoods", position = "topright") %>%
+  addControl('<a href="https://data.boston.gov/dataset/vision-zero-entry1">Data source</a>', position = "bottomleft") %>%
+  addLegend(
+    pal = pal,
+             values = nhoods$num_v0,
+             title = "crash incidents",
+            opacity = 0.8)
+
+
+
+
+
+```
+## Area centroid map
+
+
+```{r, warning=FALSE, message=FALSE, comment=F}
+MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs "
+
+WGS84 <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+
+nhood_points <-  st_centroid( st_transform(nhoods, crs = MA_state_plane) %>%
+  st_transform(WGS84))
+
+bins <- seq(min(nhood_points$num_v0),
+            max(nhood_points$num_v0), by = 1)
+
+nhood_points$label <- 
+  paste(nhood_points$Name, "<br>", 
+        nhood_points$num_v0, " number of crash incidents") %>% 
+  lapply(htmltools::HTML)
+
+leaflet(nhood_points) %>%
+  addProviderTiles(providers$CartoDB.Voyager) %>%
+  addCircles(label = ~label,
+             fillColor = ~pal(nhood_points$num_v0),
+             stroke = FALSE, 
+             radius = 150, 
+             fillOpacity = 1) %>% 
+  addLegend(label=~label,
+            pal = pal, 
+            values = ~nhood_points$num_v0,
+            bins = 3,
+            opacity = 0.7, title = "Vision Zero report by neighborhoods",
+            position = "topright")
+
+```
+## Interpolation raster map
+
+
+```{r, warning=FALSE, message=FALSE, comment=F}
+nhood_pts_sp <- nhood_points %>%
+  st_transform(MA_state_plane) %>%
+  as_Spatial()
+
+nhood_poly_sp <- nhoods %>%
+  st_transform(MA_state_plane) %>%
+  as_Spatial()
+
+pal <- colorNumeric(
+  palette = "Blues",
+  domain = nhood_points$num_v0,na.color = "#00000000")
+
+raster <- raster(nhood_poly_sp, res=10)
+
+gs <- gstat(formula=num_v0~1, locations=nhood_pts_sp)
+idw_interp <- interpolate(raster, gs)
+
+idw_interp_clip <- mask(idw_interp, nhood_poly_sp)
+
+leaflet(nhood_points) %>%
+  addProviderTiles(providers$CartoDB.Voyager) %>%
+  addRasterImage(idw_interp_clip, colors = pal, opacity = 0.8) %>% 
+  addLegend(pal = pal, 
+            values = ~num_v0,
+            bins = 3,
+            opacity = 0.7, title = "Vision Zero report by neighborhoods",
+            position = "topright")
+
+```
+
+
+
+
